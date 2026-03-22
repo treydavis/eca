@@ -660,6 +660,7 @@
                                   (lifecycle/send-content! chat-ctx :system {:type :text :text (or message (str "Error: " (or (ex-message exception) (.getName (class exception)))))})
                                   (lifecycle/finish-chat-prompt! :idle (dissoc chat-ctx :on-finished-side-effect))))))})
               (catch Exception e
+                (swap! db* update-in [:chats chat-id] dissoc :auto-compacting? :compacting?)
                 (when-not (:silent? (ex-data e))
                   (logger/error e)
                   (lifecycle/send-content! chat-ctx :system {:type :text :text (str "Error: " (or (ex-message e) (.getName (class e))))})
