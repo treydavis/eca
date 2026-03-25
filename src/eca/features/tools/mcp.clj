@@ -52,7 +52,7 @@
 (def ^:private env-var-regex
   #"\$(\w+)|\$\{([^}]+)\}")
 
-(defn ^:private replace-env-vars [s]
+(defn replace-env-vars [s]
   (let [env (System/getenv)]
     (string/replace s
                     env-var-regex
@@ -61,7 +61,15 @@
                           (str "$" var1)
                           (str "${" var2 "}"))))))
 
-(defn ^:private ->transport [server-name server-config workspaces db*]
+(defn make-transport
+  "Create an MCP transport for the given server config.
+
+   `get-access-token` is a zero-arg fn called per-request to inject a fresh
+   Bearer token into HTTP requests. Pass nil for servers that don't need
+   dynamic auth (e.g. STDIO or static-header servers).
+
+   Returns {:transport <plumcp-transport> :needs-reinit?* <atom|nil>}."
+  [server-name server-config workspaces get-access-token]
   (if (:url server-config)
     ;; HTTP Streamable transport
     (let [needs-reinit?* (atom false)
@@ -75,7 +83,7 @@
                                            [(name k) (replace-env-vars (str v))]))
                                  config-headers))
                    (update :headers merge
-                           (when-let [access-token (get-in @db* [:mcp-auth server-name :access-token])]
+                           (when-let [access-token (and get-access-token (get-access-token))]
                              {"Authorization" (str "Bearer " access-token)}))))
           hc (phc/make-http-client url (cond-> {:request-middleware rm}
                                          ssl-ctx (assoc :ssl-context ssl-ctx)))]
@@ -112,8 +120,8 @@
    (fn [jsonrpc-notification]
      (future (f jsonrpc-notification)))))
 
-(defn ^:private ->client [name transport init-timeout workspaces
-                          {:keys [on-tools-change]}]
+(defn ^:private make-client [name transport init-timeout workspaces
+                             {:keys [on-tools-change]}]
   (let [tools-consumer (fn [tools]
                          (logger/info logger-tag
                                       (format "[%s] Tools list changed, received %d tools"
@@ -151,7 +159,7 @@
                                 {:timeout-millis (* 1000 init-timeout)})
     client))
 
-(defn ^:private ->server [mcp-name server-config status db]
+(defn ->server [mcp-name server-config status db]
   {:name (name mcp-name)
    :command (:command server-config)
    :args (:args server-config)
@@ -163,7 +171,7 @@
    :has-auth (boolean (get-in db [:mcp-auth mcp-name :access-token]))
    :status status})
 
-(defn ^:private ->content [content-client]
+(defn ->content [content-client]
   (case (:type content-client)
     "text" {:type :text
             :text (:text content-client)}
@@ -182,7 +190,7 @@
                                         (:type content-client)))
         nil)))
 
-(defn ^:private ->resource-content [resource-content-client]
+(defn ->resource-content [resource-content-client]
   (let [uri (:uri resource-content-client)]
     (cond
       (:text resource-content-client)
@@ -193,14 +201,14 @@
 
       :else nil)))
 
-(defn ^:private tool->internal
+(defn tool->internal
   "Adapt plumcp tool map to ECA's internal tool shape."
   [tool]
   {:name (:name tool)
    :description (:description tool)
    :parameters (:inputSchema tool)})
 
-(defn ^:private format-jsonrpc-error
+(defn format-jsonrpc-error
   "Format a JSON-RPC error map into a readable string for logging."
   [jsonrpc-error]
   (let [code (:code jsonrpc-error)
@@ -214,29 +222,47 @@
       data (str " data=" (pr-str data))
       (and (nil? code) (nil? message)) (str (pr-str jsonrpc-error)))))
 
-(defn ^:private on-list-error [kind]
+(defn on-list-error [kind]
   (fn [_id jsonrpc-error]
     (logger/warn logger-tag (format "Could not list %s: %s" kind (format-jsonrpc-error jsonrpc-error)))
     []))
 
-(defn ^:private list-server-tools [client]
+(defn list-server-tools [client]
   (if (get-in (pmc/get-initialize-result client) [:capabilities :tools])
     (or (some->> (pmc/list-tools client {:on-error (on-list-error "tools")})
                  (mapv tool->internal))
         [])
     []))
 
-(defn ^:private list-server-prompts [client]
+(defn list-server-prompts [client]
   (if (get-in (pmc/get-initialize-result client) [:capabilities :prompts])
     (or (pmc/list-prompts client {:on-error (on-list-error "prompts")})
         [])
     []))
 
-(defn ^:private list-server-resources [client]
+(defn list-server-resources [client]
   (if (get-in (pmc/get-initialize-result client) [:capabilities :resources])
     (or (pmc/list-resources client {:on-error (on-list-error "resources")})
         [])
     []))
+
+(defn fetch-capabilities
+  "Query a connected MCP client for its full capability set and return a plain
+   data map. Callable from the REPL against any live client.
+
+   Returns:
+     {:tools        [{:name ... :description ... :parameters ...} ...]
+      :prompts      [...]
+      :resources    [...]
+      :version      \"x.y.z\"
+      :instructions \"...\"}"
+  [client]
+  (let [init-result (pmc/get-initialize-result client)]
+    {:tools        (list-server-tools client)
+     :prompts      (list-server-prompts client)
+     :resources    (list-server-resources client)
+     :version      (get-in init-result [:serverInfo :version])
+     :instructions (:instructions init-result)}))
 
 (defn ^:private initialize-mcp-oauth
   [oauth-info
@@ -249,7 +275,7 @@
                                                   :oauth-info oauth-info})
   (on-server-updated (->server server-name server-config :requires-auth @db*)))
 
-(defn ^:private token-expired?
+(defn token-expired?
   "Check if the token is expired or will expire in the next 60 seconds."
   [expires-at]
   (when expires-at
@@ -277,7 +303,7 @@
 
 (def ^:private max-init-retries 3)
 
-(defn ^:private transient-transport-error?
+(defn transient-transport-error?
   "Checks if the exception (or its root cause) is a transient transport error
    that warrants a retry. This covers infrastructure issues like load balancers
    or proxies closing connections, network interruptions, and connection resets."
@@ -336,20 +362,16 @@
                                     (swap! db* assoc-in [:mcp-clients name :tools] tools)
                                     (on-server-updated (->server name server-config :running @db*))))]
             (loop [attempt 1]
-              (let [{:keys [transport needs-reinit?*]} (->transport name server-config workspaces db*)
+              (let [{:keys [transport needs-reinit?*]} (make-transport name server-config workspaces
+                                                                          #(get-in @db* [:mcp-auth name :access-token]))
                     result (try
-                             (let [client (->client name transport init-timeout workspaces
-                                                    {:on-tools-change on-tools-change})
-                                   init-result (pmc/get-initialize-result client)
-                                   version (get-in init-result [:serverInfo :version])]
-                               (swap! db* assoc-in [:mcp-clients name] {:client client
-                                                                        :status :starting
-                                                                        :needs-reinit?* needs-reinit?*})
-                               (swap! db* assoc-in [:mcp-clients name :version] version)
-                               (swap! db* assoc-in [:mcp-clients name :instructions] (:instructions init-result))
-                               (swap! db* assoc-in [:mcp-clients name :tools] (list-server-tools client))
-                               (swap! db* assoc-in [:mcp-clients name :prompts] (list-server-prompts client))
-                               (swap! db* assoc-in [:mcp-clients name :resources] (list-server-resources client))
+                             (let [client (make-client name transport init-timeout workspaces
+                                                       {:on-tools-change on-tools-change})
+                                   caps   (fetch-capabilities client)]
+                               (swap! db* assoc-in [:mcp-clients name]
+                                      (merge caps {:client       client
+                                                   :status       :starting
+                                                   :needs-reinit?* needs-reinit?*}))
                                (if (and needs-reinit?* @needs-reinit?*)
                                  (do (try (pp/stop-client-transport! transport false) (catch Exception _))
                                      (if (< attempt max-init-retries)
@@ -572,7 +594,7 @@
   {:error true
    :contents [{:type :text :text msg}]})
 
-(defn ^:private reinit-worthy-http-status?
+(defn reinit-worthy-http-status?
   "HTTP status codes that indicate the session/auth is broken and the server
    connection should be re-initialized (e.g. expired token, server error)."
   [status]
