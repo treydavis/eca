@@ -6,10 +6,10 @@
     2. STDIO               — spawn a local process as an MCP server
 
   Usage (HTTP):
-    (connect-http! \"http://localhost:5551/mcp\")
+    (connect! (http-transport \"http://localhost:5551/mcp\"))
 
   Usage (STDIO):
-    (connect-stdio! \"npx\" [\"-y\" \"@modelcontextprotocol/server-filesystem\" \"/tmp\"])"
+    (connect! (stdio-transport \"npx\" [\"-y\" \"@modelcontextprotocol/server-filesystem\" \"/tmp\"]))"
   (:require
    [plumcp.core.api.entity-support :as pes]
    [plumcp.core.api.mcp-client :as pmc]
@@ -17,48 +17,27 @@
    [plumcp.core.client.stdio-client-transport :as psct]
    [plumcp.core.support.http-client :as phc]))
 
-;; ---------------------------------------------------------------------------
-;; HTTP (Streamable HTTP) transport
-;; ---------------------------------------------------------------------------
+(defn http-transport [url]
+  (phct/make-streamable-http-transport (phc/make-http-client url {})))
 
-(defn connect-http!
-  "Connect to an MCP server over Streamable HTTP.
-  Returns the initialized client."
-  [url]
-  (let [http-client (phc/make-http-client url {})
-        transport   (phct/make-streamable-http-transport http-client)
-        client      (pmc/make-mcp-client
-                     {:info              (pes/make-info "my-client" "1.0.0" "My MCP Client")
-                      :client-transport  transport
-                      :print-banner?     false})]
-    (pmc/initialize-and-notify! client {:timeout-millis 10000})
-    client))
+(defn stdio-transport [command args]
+  (psct/run-command {:command-tokens (into [command] args)
+                     :dir            (System/getProperty "user.home")}))
 
-;; ---------------------------------------------------------------------------
-;; STDIO transport
-;; ---------------------------------------------------------------------------
+(defn make-client [transport]
+  (pmc/make-mcp-client {:info             (pes/make-info "my-client" "1.0.0" "My MCP Client")
+                        :client-transport transport
+                        :print-banner?    false}))
 
-(defn connect-stdio!
-  "Spawn `command` with `args` as an MCP server process and connect to it.
-  Returns the initialized client."
-  [command args]
-  (let [transport (psct/run-command
-                   {:command-tokens (into [command] args)
-                    :dir            (System/getProperty "user.home")})
-        client    (pmc/make-mcp-client
-                   {:info             (pes/make-info "my-client" "1.0.0" "My MCP Client")
-                    :client-transport transport
-                    :print-banner?    false})]
-    (pmc/initialize-and-notify! client {:timeout-millis 10000})
-    client))
-
-;; ---------------------------------------------------------------------------
-;; Using the client
-;; ---------------------------------------------------------------------------
+(defn connect!
+  "Initialize the client and return it ready for use."
+  [transport]
+  (doto (make-client transport)
+    (pmc/initialize-and-notify! {:timeout-millis 10000})))
 
 (comment
   ;; -- HTTP example --
-  (def client (connect-http! "http://localhost:5551/mcp"))
+  (def client (connect! (http-transport "http://localhost:5551/mcp")))
 
   ;; Inspect the initialize result (capabilities, server info)
   (pmc/get-initialize-result client)
@@ -76,6 +55,6 @@
   (pmc/disconnect! client)
 
   ;; -- STDIO example --
-  (def client (connect-stdio! "npx" ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]))
+  (def client (connect! (stdio-transport "npx" ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"])))
   (pmc/list-tools client {})
   (pmc/disconnect! client))
