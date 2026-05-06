@@ -273,7 +273,7 @@
         ;; HTTP server can be started later (e.g. when local project config
         ;; enables it after initialize). Broadcasting to an empty set is a no-op.
         sse-connections* (atom #{})
-        messenger (remote.messenger/->BroadcastMessenger stdio-messenger sse-connections*)
+        messenger (remote.messenger/make-broadcast-messenger stdio-messenger sse-connections*)
         start-remote-server!
         (fn [components]
           (when-let [rs (remote.server/start! components sse-connections*)]

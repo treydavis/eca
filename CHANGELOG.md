@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Support `ask_user` agent questions for remote REST/SSE clients (e.g. `eca-web`): the remote server now declares the `askQuestion` capability, broadcasts `chat:ask-question` over SSE with a generated `requestId`, and accepts answers via the new `POST /api/v1/answer` endpoint. Falls back to the JSON-RPC inner messenger when no SSE clients are connected, preserving editor behavior.
+
 ## 0.132.0
 
 - `variantsByModel` entries now support an optional `:api` filter (string or vector) to restrict variant matching by provider API type.
