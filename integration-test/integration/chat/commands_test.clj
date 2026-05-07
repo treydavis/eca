@@ -40,7 +40,8 @@
                        {:name "subagents" :arguments []}
                        {:name "plugins" :arguments []}
                        {:name "plugin-install" :arguments [{:name "plugin"}]}
-                       {:name "plugin-uninstall" :arguments [{:name "plugin"}]}]}
+                       {:name "plugin-uninstall" :arguments [{:name "plugin"}]}
+                       {:name "eca-info" :arguments nil}]}
            resp))))
 
   (testing "We query specific commands"
