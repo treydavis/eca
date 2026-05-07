@@ -215,7 +215,9 @@
         (let [config (config/all @db*)]
           (handlers/chat-selected-model-changed
            (assoc components :config config)
-           {:model (:model body)})
+           {:chat-id chat-id
+            :model (:model body)
+            :variant (:variant body)})
           (no-content))))))
 
 (defn handle-change-agent [{:keys [db*] :as components} request chat-id]
@@ -227,7 +229,8 @@
         (let [config (config/all @db*)]
           (handlers/chat-selected-agent-changed
            (assoc components :config config)
-           {:agent (:agent body)})
+           {:chat-id chat-id
+            :agent (:agent body)})
           (no-content))))))
 
 (defn handle-change-variant [{:keys [db*] :as components} request chat-id]
@@ -241,7 +244,8 @@
                         (f.chat/default-model @db* config))]
           (handlers/chat-selected-model-changed
            (assoc components :config config)
-           {:model model
+           {:chat-id chat-id
+            :model model
             :variant (:variant body)})
           (no-content))))))
 

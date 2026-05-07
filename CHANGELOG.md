@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Support client-generated chat ids: clients may now create the `chatId` themselves and send it on the first `chat/prompt`. eca-emacs#231.
+- Per-chat scoping of model/agent changes: `chat/selectedModelChanged` and `chat/selectedAgentChanged` now accept an optional `chatId`; when provided the server scopes the persisted state and the resulting `config/updated` broadcast to that chat. The remote REST endpoints `/chat/:chatId/select-model|select-agent|select-variant` now forward the URL chat-id to those handlers (previously dropped). `validate-client-chat-id` is now public and rejects whitespace / control chars. eca-emacs#231.
+
 ## 0.133.0
 
 - Add `chat/promptSteerRemove` notification for discarding a pending steer message before it is consumed at the next LLM turn boundary. Idempotent: silent no-op when no steer is pending.
