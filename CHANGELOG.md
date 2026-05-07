@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.133.0
+
 - Add `chat/promptSteerRemove` notification for discarding a pending steer message before it is consumed at the next LLM turn boundary. Idempotent: silent no-op when no steer is pending.
 
 ## 0.132.1
