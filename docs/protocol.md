@@ -1523,6 +1523,26 @@ interface ChatPromptSteerParams {
 }
 ```
 
+### Chat steer prompt remove (➡️)
+
+A client notification to discard any pending steer message that has not yet been consumed by the LLM loop.
+The notification is idempotent: if no steer message is pending (or it was already consumed at the next turn boundary),
+the server silently does nothing.
+
+_Notification:_
+
+* method: `chat/promptSteerRemove`
+* params: `ChatPromptSteerRemoveParams` defined as follows:
+
+```typescript
+interface ChatPromptSteerRemoveParams {
+    /**
+     * The chat session identifier.
+     */
+    chatId: string;
+}
+```
+
 ### Chat rollback (↩️)
 
 A client request to rollback chat messages to before a specific user sent message using `contentId`.

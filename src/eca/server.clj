@@ -97,6 +97,9 @@
 (defmethod jsonrpc.server/receive-notification "chat/promptSteer" [_ components params]
   (handlers/chat-prompt-steer (with-config components) params))
 
+(defmethod jsonrpc.server/receive-notification "chat/promptSteerRemove" [_ components params]
+  (handlers/chat-prompt-steer-remove (with-config components) params))
+
 (defmethod jsonrpc.server/receive-request "chat/delete" [_ components params]
   (eventually (handlers/chat-delete (with-config components) params)))
 

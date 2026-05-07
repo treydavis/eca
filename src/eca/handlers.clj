@@ -214,6 +214,10 @@
   (metrics/task metrics :eca/chat-prompt-steer
     (f.chat/prompt-steer params db*)))
 
+(defn chat-prompt-steer-remove [{:keys [db* metrics]} params]
+  (metrics/task metrics :eca/chat-prompt-steer-remove
+    (f.chat/prompt-steer-remove params db*)))
+
 (defn chat-delete [{:keys [db* messenger config metrics]} params]
   (metrics/task metrics :eca/chat-delete
     (f.chat/delete-chat params db* messenger config metrics)

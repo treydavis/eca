@@ -1341,6 +1341,20 @@
     (swap! db* update-in [:chats chat-id :steer-message]
            (fn [existing] (if existing (str existing "\n" message) message)))))
 
+(defn prompt-steer-remove
+  "Drop any pending steer message for the chat.
+   No-op if no steer message is pending or the chat is not present.
+   Idempotent: cancelling an already-consumed steer is silent."
+  [{:keys [chat-id]} db*]
+  (let [removed?* (volatile! false)]
+    (swap! db* (fn [db]
+                 (if (get-in db [:chats chat-id :steer-message])
+                   (do (vreset! removed?* true)
+                       (update-in db [:chats chat-id] dissoc :steer-message))
+                   db)))
+    (when @removed?*
+      (logger/info logger-tag "Steer message removed" {:chat-id chat-id}))))
+
 (defn prompt-stop
   ([params db* messenger metrics]
    (prompt-stop params db* messenger metrics {}))

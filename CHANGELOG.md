@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `chat/promptSteerRemove` notification for discarding a pending steer message before it is consumed at the next LLM turn boundary. Idempotent: silent no-op when no steer is pending.
+
 ## 0.132.1
 
 - Support `ask_user` agent questions for remote REST/SSE clients (e.g. `eca-web`): the remote server now declares the `askQuestion` capability, broadcasts `chat:ask-question` over SSE with a generated `requestId`, and accepts answers via the new `POST /api/v1/answer` endpoint. Falls back to the JSON-RPC inner messenger when no SSE clients are connected, preserving editor behavior.
